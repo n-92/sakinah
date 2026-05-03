@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Soothing dark palette tuned for low-vision contrast (WCAG AAA on text) */
+:root {
+  --background: #020617; /* slate-950 */
+  --foreground: #f1f5f9; /* slate-100 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Visible, high-contrast focus ring for everyone, not just :focus-visible
+   browsers — important for keyboard-only and screen-reader users. */
+:focus-visible {
+  outline: 3px solid #fcd34d; /* amber-300 */
+  outline-offset: 3px;
+}
+
+/* Honor user motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Subtle radial glow behind hero, decorative only. */
+.hero-glow {
+  background:
+    radial-gradient(ellipse at top, rgba(16, 185, 129, 0.08), transparent 60%),
+    radial-gradient(ellipse at bottom, rgba(251, 191, 36, 0.06), transparent 60%);
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
