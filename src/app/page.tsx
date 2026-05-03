@@ -184,6 +184,13 @@ export default function Home() {
       <UserPanel refreshKey={refreshKey} onPlayCollection={handleMood} />
 
       <footer className="mt-auto pt-12 text-xs text-slate-600 text-center max-w-xl">
+        <a
+          href="/docs"
+          className="text-slate-400 underline underline-offset-4 hover:text-amber-200"
+        >
+          How it works →
+        </a>
+        <span className="mx-2 text-slate-700">·</span>
         Built for the Quran Foundation Hackathon 2026 · Powered by{" "}
         <a
           href="https://mcp.quran.ai"
