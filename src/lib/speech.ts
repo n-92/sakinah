@@ -157,8 +157,26 @@ export function listenOnce(opts: {
     const transcript = e.results[0]?.[0]?.transcript ?? "";
     if (transcript) opts.onResult(transcript);
   };
-  rec.onerror = (e) => opts.onError?.(e.error || "Speech recognition error");
+  rec.onerror = (e) => opts.onError?.(friendlySpeechError(e.error));
   rec.onend = () => opts.onEnd?.();
   rec.start();
   return { stop: () => rec.stop() };
+}
+
+function friendlySpeechError(code: string): string {
+  switch (code) {
+    case "network":
+      return "Voice input couldn't reach the recognition service. Your network or browser may be blocking it — please type instead.";
+    case "not-allowed":
+    case "service-not-allowed":
+      return "Microphone permission was blocked. Allow it in your browser's site settings, or type instead.";
+    case "no-speech":
+      return "I didn't catch any speech. Try again, or type instead.";
+    case "audio-capture":
+      return "No microphone detected. Plug one in or type instead.";
+    case "aborted":
+      return "Voice input was cancelled.";
+    default:
+      return code ? `Voice input error (${code}). Please type instead.` : "Voice input error. Please type instead.";
+  }
 }
