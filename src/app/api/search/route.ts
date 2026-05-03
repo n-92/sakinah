@@ -213,6 +213,12 @@ export async function POST(req: Request) {
         ayahs,
         passages,
         total: hits.length,
+        source: "semantic",
+        citations: [
+          `search_quran(${JSON.stringify(mood)}, translations=${ENGLISH_EDITION})`,
+          `fetch_quran(${ranges}, ${ARABIC_EDITION})`,
+          `fetch_translation(${ranges}, ${ENGLISH_EDITION})`,
+        ],
       } satisfies SearchResponse,
       { headers: { "Cache-Control": "no-store" } },
     );

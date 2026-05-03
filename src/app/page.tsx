@@ -176,6 +176,7 @@ export default function Home() {
           mood={result.query}
           passages={result.passages}
           duas={result.duas}
+          citations={result.citations}
           onClose={closePlayer}
         />
       )}

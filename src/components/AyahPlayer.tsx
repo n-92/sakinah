@@ -12,12 +12,13 @@ type Props = {
   mood: string;
   passages?: { surah: number; start: number; end: number }[];
   duas?: DuaMeta[];
+  citations?: string[];
   onClose: () => void;
 };
 
 type Phase = "arabic" | "english" | "between" | "idle";
 
-export default function AyahPlayer({ ayahs, mood, passages, duas, onClose }: Props) {
+export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onClose }: Props) {
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
   const [playing, setPlaying] = useState(false);
@@ -38,6 +39,10 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, onClose }: Pro
   const [bookmarkedKeys, setBookmarkedKeys] = useState<Set<string>>(
     () => new Set(storage.listBookmarks().map((b) => b.ayah_key)),
   );
+  const [tafsirOpen, setTafsirOpen] = useState(false);
+  const [tafsirCache, setTafsirCache] = useState<
+    Record<string, { text: string; edition_name: string; loading: boolean; error?: string }>
+  >({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cancelledRef = useRef(false);
 
@@ -183,15 +188,59 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, onClose }: Pro
       else if (e.key === "ArrowLeft") prev();
       else if (e.key.toLowerCase() === "r") repeat();
       else if (e.key.toLowerCase() === "b") toggleBookmark();
+      else if (e.key.toLowerCase() === "t") toggleTafsir();
       else if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, index, current]);
+  }, [playing, index, current, tafsirOpen]);
+
+  // When tafsir is open, prefetch for the active ayah whenever it changes.
+  useEffect(() => {
+    if (tafsirOpen && current) {
+      loadTafsir(current.ayah_key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tafsirOpen, current?.ayah_key]);
 
   if (!current) return null;
   const bookmarked = bookmarkedKeys.has(current.ayah_key);
+  const tafsir = tafsirCache[current.ayah_key];
+
+  async function loadTafsir(key: string) {
+    if (tafsirCache[key]?.text || tafsirCache[key]?.loading) return;
+    setTafsirCache((prev) => ({
+      ...prev,
+      [key]: { text: "", edition_name: "", loading: true },
+    }));
+    try {
+      const r = await fetch(`/api/tafsir?ayah=${encodeURIComponent(key)}`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+      const text = (j.items ?? []).map((it: { text: string }) => it.text).join("\n\n");
+      setTafsirCache((prev) => ({
+        ...prev,
+        [key]: { text, edition_name: j.edition_name ?? "Tafsir", loading: false },
+      }));
+    } catch (err) {
+      setTafsirCache((prev) => ({
+        ...prev,
+        [key]: {
+          text: "",
+          edition_name: "",
+          loading: false,
+          error: err instanceof Error ? err.message : "Failed to load tafsir",
+        },
+      }));
+    }
+  }
+
+  function toggleTafsir() {
+    const next = !tafsirOpen;
+    setTafsirOpen(next);
+    if (next && current) loadTafsir(current.ayah_key);
+  }
 
   // Identify which du'ā (if any) corresponds to the currently playing ayah.
   const activeDua = (() => {
@@ -270,6 +319,43 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, onClose }: Pro
           — {current.translations[0]?.edition_name}
         </p>
 
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={toggleTafsir}
+            aria-expanded={tafsirOpen}
+            aria-controls="tafsir-panel"
+            className="text-sm text-amber-300 hover:text-amber-200 focus-visible:outline-amber-300 focus-visible:outline-offset-2 underline underline-offset-4"
+          >
+            {tafsirOpen ? "▾ Hide tafsīr" : "▸ Show tafsīr (Ibn Kathīr)"}
+          </button>
+          {tafsirOpen && (
+            <div
+              id="tafsir-panel"
+              role="region"
+              aria-label="Tafsir Ibn Kathir"
+              className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-slate-200"
+            >
+              {tafsir?.loading && (
+                <p className="text-sm text-slate-400">Loading tafsīr…</p>
+              )}
+              {tafsir?.error && (
+                <p className="text-sm text-rose-300">⚠ {tafsir.error}</p>
+              )}
+              {tafsir?.text && (
+                <>
+                  <p className="text-xs uppercase tracking-wider text-amber-300/80 mb-2">
+                    {tafsir.edition_name}
+                  </p>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap max-h-[420px] overflow-y-auto pr-2">
+                    {tafsir.text}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         <p
           aria-live="polite"
           className="mt-6 text-sm text-emerald-300"
@@ -345,9 +431,23 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, onClose }: Pro
           <li>← / → — previous / next ayah</li>
           <li>R — repeat current ayah</li>
           <li>B — bookmark / unbookmark</li>
+          <li>T — show / hide tafsīr</li>
           <li>Esc — close player</li>
         </ul>
       </details>
+
+      {citations && citations.length > 0 && (
+        <div
+          aria-label="Sources"
+          className="text-[11px] leading-relaxed text-slate-500 border-t border-slate-800 pt-3 font-mono break-words"
+        >
+          <span className="text-emerald-400">✓ Grounded in mcp.quran.ai:</span>{" "}
+          {citations.join(" · ")}
+          {tafsirOpen && tafsir?.text && current && (
+            <> · fetch_tafsir({current.ayah_key}, en-ibn-kathir)</>
+          )}
+        </div>
+      )}
     </section>
   );
 }

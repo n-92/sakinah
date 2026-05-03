@@ -137,6 +137,10 @@ export async function POST(req: Request) {
         duas,
         total: ayahs.length,
         source: "dua",
+        citations: [
+          `fetch_quran(${ranges}, ${ARABIC_EDITION})`,
+          `fetch_translation(${ranges}, ${ENGLISH_EDITION})`,
+        ],
       } satisfies SearchResponse,
       { headers: { "Cache-Control": "no-store" } },
     );

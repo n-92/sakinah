@@ -79,6 +79,11 @@ export async function POST() {
       ayahs,
       passages: [{ surah, start: 1, end }],
       total: ayahs.length,
+      source: "random",
+      citations: [
+        `fetch_quran(${range}, ${ARABIC_EDITION})`,
+        `fetch_translation(${range}, ${ENGLISH_EDITION})`,
+      ],
     };
     return NextResponse.json(payload, {
       headers: { "Cache-Control": "no-store" },

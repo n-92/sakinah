@@ -42,4 +42,6 @@ export type SearchResponse = {
   warnings?: string[];
   duas?: DuaMeta[];
   source?: "semantic" | "dua" | "random";
+  /** Human-readable record of MCP tool calls used to ground this response. */
+  citations?: string[];
 };
