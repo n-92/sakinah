@@ -39,7 +39,8 @@ export default function DocsPage() {
         <Section title="The 30-second tour">
           <ol className="list-decimal pl-5 space-y-2 leading-relaxed">
             <li>
-              <strong className="text-slate-100">Type or speak</strong> what you&apos;re
+              <strong className="text-slate-100">Type or speak</strong>{" "}
+              what you&apos;re
               thinking — &ldquo;I feel anxious&rdquo;, &ldquo;studying for an exam&rdquo;, &ldquo;tell
               me about animals&rdquo;.
             </li>
