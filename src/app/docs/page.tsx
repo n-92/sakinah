@@ -45,13 +45,15 @@ export default function DocsPage() {
               me about animals&rdquo;.
             </li>
             <li>
-              <strong className="text-slate-100">Sakīnah listens.</strong> It first
+              <strong className="text-slate-100">Sakīnah listens.</strong>{" "}
+              It first
               checks a curated catalogue of authentic du&apos;ās from the Qur&apos;ān; if
               nothing fits, it does a semantic search across the Qur&apos;ān via the
               Qur&apos;ān Foundation MCP server.
             </li>
             <li>
-              <strong className="text-slate-100">It plays the passage.</strong> Arabic
+              <strong className="text-slate-100">It plays the passage.</strong>{" "}
+              Arabic
               recitation, then English translation, ayah by ayah. Tafsīr Ibn Kathīr is
               one tap away.
             </li>
@@ -149,21 +151,25 @@ export default function DocsPage() {
         <Section title="Privacy">
           <ul className="list-disc pl-5 space-y-1.5 leading-relaxed">
             <li>
-              <strong className="text-slate-100">Guests:</strong> bookmarks and saved
+              <strong className="text-slate-100">Guests:</strong>{" "}
+              bookmarks and saved
               moods stay in your browser&apos;s <code className="kbd">localStorage</code>.
               Nothing leaves your device.
             </li>
             <li>
-              <strong className="text-slate-100">Signed-in users:</strong> reading
+              <strong className="text-slate-100">Signed-in users:</strong>{" "}
+              reading
               sessions are POSTed to the Qur&apos;ān Foundation Activity Days API so streaks
               follow you anywhere. Your search queries are never stored.
             </li>
             <li>
-              <strong className="text-slate-100">No third-party analytics.</strong> No
+              <strong className="text-slate-100">No third-party analytics.</strong>{" "}
+              No
               trackers, no ads, no fingerprinting.
             </li>
             <li>
-              <strong className="text-slate-100">Voice input</strong> uses your
+              <strong className="text-slate-100">Voice input</strong>{" "}
+              uses your
               browser&apos;s built-in Web Speech API — audio is processed by your browser
               vendor (typically Google), never by Sakīnah.
             </li>
