@@ -37,7 +37,7 @@ export default function DocsPage() {
         </header>
 
         <Section title="The 30-second tour">
-          <ol className="list-decimal pl-5 space-y-2 leading-relaxed">
+          <ol className="list-decimal pl-5 space-y-3 leading-relaxed">
             <li>
               <strong className="text-slate-100">Type or speak</strong>{" "}
               what you&apos;re
@@ -85,7 +85,7 @@ export default function DocsPage() {
             <em>eyes-closed mode</em> — every flow can be completed without seeing the
             screen.
           </p>
-          <ul className="list-disc pl-5 mt-3 space-y-1.5 leading-relaxed">
+          <ul className="list-disc pl-5 mt-3 space-y-3 leading-relaxed">
             <li>Full keyboard navigation; visible focus rings on every control</li>
             <li>
               Screen-reader announcements via <code className="kbd">aria-live</code>{" "}
@@ -149,7 +149,7 @@ export default function DocsPage() {
         </Section>
 
         <Section title="Privacy">
-          <ul className="list-disc pl-5 space-y-1.5 leading-relaxed">
+          <ul className="list-disc pl-5 space-y-3 leading-relaxed">
             <li>
               <strong className="text-slate-100">Guests:</strong>{" "}
               bookmarks and saved
