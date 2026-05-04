@@ -87,3 +87,155 @@ export async function getActivityDays(opts: {
   );
   return r.data ?? [];
 }
+
+// ─── Bookmarks ──────────────────────────────────────────────────────────
+export type QfBookmark = {
+  id: string;
+  type: "ayah" | "surah" | "juz" | "page";
+  key: number;
+  verseNumber?: number;
+  mushafId?: number;
+  createdAt?: string;
+};
+
+export async function addBookmark(opts: {
+  surah: number;
+  ayah: number;
+  mushafId?: number;
+}): Promise<void> {
+  // Use the default ("Favorites") collection — this is the QF-recommended
+  // way to create a Quran.com-style saved/favorite ayah bookmark.
+  // Standalone POST /bookmarks creates a bookmark that isn't in the
+  // user's Favorites and behaves more like a transient reading marker.
+  await call<{ success: boolean; data: { message: string } }>(
+    "POST",
+    "/collections/__default__/bookmarks",
+    {
+      body: {
+        type: "ayah",
+        key: opts.surah,
+        verseNumber: opts.ayah,
+        mushafId: opts.mushafId ?? 4,
+      },
+    },
+  );
+}
+
+/**
+ * Create a standalone bookmark (returns the bookmark id).
+ * Used when we then need to attach it to a non-default collection.
+ */
+export async function addStandaloneBookmark(opts: {
+  surah: number;
+  ayah: number;
+  mushafId?: number;
+}): Promise<QfBookmark> {
+  const r = await call<{ success: boolean; data: QfBookmark }>("POST", "/bookmarks", {
+    body: {
+      type: "ayah",
+      key: opts.surah,
+      verseNumber: opts.ayah,
+      mushafId: opts.mushafId ?? 4,
+    },
+  });
+  return r.data;
+}
+
+export async function listBookmarks(mushafId = 4): Promise<QfBookmark[]> {
+  // Page through all bookmarks. QF caps `first` at 20.
+  const all: QfBookmark[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < 10; i += 1) {
+    const query: Record<string, string> = {
+      type: "ayah",
+      mushafId: String(mushafId),
+      first: "20",
+    };
+    if (cursor) query.after = cursor;
+    const r = await call<{
+      success: boolean;
+      data?: QfBookmark[];
+      pagination?: { endCursor?: string; hasNextPage?: boolean };
+    }>("GET", "/bookmarks", { query });
+    const page = r.data ?? [];
+    all.push(...page);
+    if (!r.pagination?.hasNextPage || !r.pagination.endCursor || page.length === 0) break;
+    cursor = r.pagination.endCursor;
+  }
+  return all;
+}
+
+export async function deleteBookmark(bookmarkId: string): Promise<void> {
+  await call<{ success: boolean }>(
+    "DELETE",
+    `/collections/__default__/bookmarks/${encodeURIComponent(bookmarkId)}`,
+  );
+}
+
+// ─── Collections ────────────────────────────────────────────────────────
+export type QfCollection = { id: string; name: string; createdAt?: string };
+
+export async function createCollection(name: string): Promise<QfCollection> {
+  const r = await call<{ success: boolean; data: QfCollection }>("POST", "/collections", {
+    body: { name },
+  });
+  return r.data;
+}
+
+export async function addBookmarkToCollection(
+  collectionId: string,
+  bookmarkId: string,
+): Promise<void> {
+  await call<{ success: boolean }>(
+    "POST",
+    `/collections/${encodeURIComponent(collectionId)}/bookmarks`,
+    { body: { bookmarkId } },
+  );
+}
+
+// ─── Notes (used as "Reflections") ──────────────────────────────────────
+export type QfNote = {
+  id: string;
+  body: string;
+  ranges?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export async function addNote(body: string, ranges: string[]): Promise<QfNote> {
+  const r = await call<{ success: boolean; data: QfNote }>("POST", "/notes", {
+    body: { body, ranges },
+  });
+  return r.data;
+}
+
+export async function getNotesByVerse(verseKey: string): Promise<QfNote[]> {
+  const r = await call<{ success: boolean; data?: QfNote[] }>(
+    "GET",
+    `/notes/by-verse/${encodeURIComponent(verseKey)}`,
+    { query: { verseKey } },
+  );
+  return r.data ?? [];
+}
+
+export async function listAllNotes(opts: {
+  cursor?: string;
+  limit?: number;
+  sortBy?: "newest" | "oldest";
+} = {}): Promise<{ notes: QfNote[]; nextCursor?: string }> {
+  const query: Record<string, string> = {
+    limit: String(opts.limit ?? 50),
+    sortBy: opts.sortBy ?? "newest",
+  };
+  if (opts.cursor) query.cursor = opts.cursor;
+  const r = await call<{
+    success: boolean;
+    data?: QfNote[];
+    pagination?: { nextCursor?: string };
+  }>("GET", "/notes", { query });
+  return { notes: r.data ?? [], nextCursor: r.pagination?.nextCursor };
+}
+
+export async function deleteNote(noteId: string): Promise<void> {
+  await call<{ success: boolean }>("DELETE", `/notes/${encodeURIComponent(noteId)}`);
+}

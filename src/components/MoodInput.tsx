@@ -136,7 +136,7 @@ export default function MoodInput({
             setText(e.target.value);
             setActiveCat(null);
           }}
-          placeholder="e.g. I keep worrying about the future"
+          placeholder="e.g. I keep worrying about the future · or “Yasin”, “Surah 36”"
           disabled={busy}
           autoComplete="off"
           className={[

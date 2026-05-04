@@ -5,9 +5,13 @@ import MoodInput from "@/components/MoodInput";
 import AyahPlayer from "@/components/AyahPlayer";
 import UserPanel from "@/components/UserPanel";
 import SignInButton from "@/components/SignInButton";
+import AyahOfTheDay from "@/components/AyahOfTheDay";
+import ReadingPlanCard from "@/components/ReadingPlanCard";
 import type { SearchResponse } from "@/lib/types";
 import { speak } from "@/lib/speech";
 import { surahName } from "@/lib/quranMeta";
+import { resolveSurahQuery } from "@/lib/surahQuery";
+import { storage } from "@/lib/storage";
 
 export default function Home() {
   const [busy, setBusy] = useState(false);
@@ -21,6 +25,28 @@ export default function Home() {
     setResult(null);
     void speak("One moment. I'm listening to the Qur'an for you.", { rate: 0.95 });
     try {
+      // Direct surah lookup — "36", "Yasin", "Al-Ikhlas", "the cave"…
+      // Skip the dua/semantic path entirely and load the whole surah.
+      const directSurah = resolveSurahQuery(mood);
+      if (directSurah) {
+        const r = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mood }),
+        });
+        const data = (await r.json()) as SearchResponse | { error: string };
+        if (r.ok && !("error" in data)) {
+          setResult(data);
+          void speak(
+            `Playing Sūrah ${directSurah}, ${surahName(directSurah)}.`,
+            { rate: 0.95 },
+          );
+        } else {
+          setError("error" in data ? data.error : "Couldn't load that surah.");
+        }
+        return;
+      }
+
       // First try the curated du'ā catalog — if there's a confident match,
       // that's almost always the most authentic answer.
       const duaR = await fetch("/api/dua", {
@@ -130,6 +156,10 @@ export default function Home() {
   }
 
   function closePlayer() {
+    // If the user just finished today's reading-plan juzʾ, credit it.
+    if (result?.source === "plan") {
+      storage.markPlanDayComplete();
+    }
     setResult(null);
     setRefreshKey((k) => k + 1);
   }
@@ -159,6 +189,11 @@ export default function Home() {
             onDuaSelect={handleDuaById}
             busy={busy}
           />
+          <ReadingPlanCard
+            onPlay={(data) => setResult(data)}
+            refreshKey={refreshKey}
+          />
+          <AyahOfTheDay onPlay={(data) => setResult(data)} />
           {error && (
             <p
               role="alert"

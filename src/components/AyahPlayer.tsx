@@ -5,6 +5,7 @@ import { ayahAudioUrl, RECITERS } from "@/lib/audio";
 import { speak, stopSpeaking } from "@/lib/speech";
 import { storage } from "@/lib/storage";
 import { surahName } from "@/lib/quranMeta";
+import { userClient, type RemoteNote } from "@/lib/userClient";
 import type { Ayah, DuaMeta } from "@/lib/types";
 
 type Props = {
@@ -43,8 +44,31 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
   const [tafsirCache, setTafsirCache] = useState<
     Record<string, { text: string; edition_name: string; loading: boolean; error?: string }>
   >({});
+  const [reflectionOpen, setReflectionOpen] = useState(false);
+  const [reflectionDraft, setReflectionDraft] = useState("");
+  const [reflectionSaving, setReflectionSaving] = useState(false);
+  const [reflectionError, setReflectionError] = useState<string | null>(null);
+  const [reflectionsByAyah, setReflectionsByAyah] = useState<Record<string, RemoteNote[]>>({});
+  const [reflectionsLoading, setReflectionsLoading] = useState(false);
+  const [reflectionGuest, setReflectionGuest] = useState(false);
+  const [ttsEnabled, setTtsEnabledState] = useState(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cancelledRef = useRef(false);
+
+  // Read persisted TTS preference once on mount (client-only).
+  useEffect(() => {
+    setTtsEnabledState(storage.getTtsEnabled());
+  }, []);
+
+  function toggleTts() {
+    setTtsEnabledState((prev) => {
+      const next = !prev;
+      storage.setTtsEnabled(next);
+      // Stop any in-flight English speech immediately when turning off.
+      if (!next) stopSpeaking();
+      return next;
+    });
+  }
 
   const current = ayahs[index];
   const arabicUrl = useMemo(
@@ -109,11 +133,13 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
       await wait(500);
       if (cancelled || cancelledRef.current) return;
 
-      // 3. English translation via SpeechSynthesis
-      setPhase("english");
-      const text = current.translations[0]?.text ?? "";
-      if (text) await speak(text, { rate: 0.9 });
-      if (cancelled || cancelledRef.current) return;
+      // 3. English translation via SpeechSynthesis — skipped when TTS is off.
+      if (ttsEnabled) {
+        setPhase("english");
+        const text = current.translations[0]?.text ?? "";
+        if (text) await speak(text, { rate: 0.9 });
+        if (cancelled || cancelledRef.current) return;
+      }
 
       // 4. Pause, then advance
       setPhase("between");
@@ -124,7 +150,9 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
       } else {
         setPlaying(false);
         setPhase("idle");
-        await speak("That was the last ayah. May it bring you peace.", { rate: 0.95 });
+        if (ttsEnabled) {
+          await speak("That was the last ayah. May it bring you peace.", { rate: 0.95 });
+        }
       }
     }
     run();
@@ -136,7 +164,7 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
       audioRef.current?.pause();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, index, arabicUrl]);
+  }, [playing, index, arabicUrl, ttsEnabled]);
 
   function play() {
     setPlaying(true);
@@ -168,6 +196,13 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
     else next.delete(current.ayah_key);
     setBookmarkedKeys(next);
     void speak(isNowSaved ? "Bookmarked." : "Bookmark removed.", { rate: 1.0 });
+
+    // Best-effort sync to QF user-API for signed-in users (silent for guests).
+    if (isNowSaved) {
+      void userClient
+        .addBookmark(current.surah, current.ayah)
+        .catch((err) => console.error("addBookmark failed:", err));
+    }
   }
   function saveCollection() {
     const coll = storage.saveMoodCollection(
@@ -175,12 +210,21 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
       ayahs.map((a) => a.ayah_key),
     );
     void speak(`Saved this playlist as a collection: ${coll.name}.`, { rate: 0.95 });
+
+    // Sync to QF Collections for signed-in users.
+    void userClient
+      .createCollection(
+        mood || "Sakīnah playlist",
+        ayahs.map((a) => ({ surah: a.surah, ayah: a.ayah })),
+      )
+      .catch(() => {});
   }
 
   // Keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement) return;
+      if (e.target instanceof HTMLTextAreaElement) return;
       if (e.key === " ") {
         e.preventDefault();
         playing ? pause() : play();
@@ -189,12 +233,14 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
       else if (e.key.toLowerCase() === "r") repeat();
       else if (e.key.toLowerCase() === "b") toggleBookmark();
       else if (e.key.toLowerCase() === "t") toggleTafsir();
+      else if (e.key.toLowerCase() === "n") toggleReflection();
+      else if (e.key.toLowerCase() === "e") toggleTts();
       else if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, index, current, tafsirOpen]);
+  }, [playing, index, current, tafsirOpen, reflectionOpen, ttsEnabled]);
 
   // When tafsir is open, prefetch for the active ayah whenever it changes.
   useEffect(() => {
@@ -203,6 +249,16 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tafsirOpen, current?.ayah_key]);
+
+  // When reflections panel is open, refresh on ayah change.
+  useEffect(() => {
+    if (reflectionOpen && current) {
+      loadReflections(current.ayah_key);
+      setReflectionDraft("");
+      setReflectionError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reflectionOpen, current?.ayah_key]);
 
   if (!current) return null;
   const bookmarked = bookmarkedKeys.has(current.ayah_key);
@@ -240,6 +296,73 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
     const next = !tafsirOpen;
     setTafsirOpen(next);
     if (next && current) loadTafsir(current.ayah_key);
+  }
+
+  async function loadReflections(key: string) {
+    setReflectionsLoading(true);
+    try {
+      const r = await userClient.listReflections(key);
+      if (r === null) {
+        setReflectionGuest(true);
+        setReflectionsByAyah((prev) => ({ ...prev, [key]: [] }));
+      } else {
+        setReflectionGuest(false);
+        setReflectionsByAyah((prev) => ({ ...prev, [key]: r.notes }));
+      }
+    } catch {
+      setReflectionsByAyah((prev) => ({ ...prev, [key]: [] }));
+    } finally {
+      setReflectionsLoading(false);
+    }
+  }
+
+  function toggleReflection() {
+    const next = !reflectionOpen;
+    setReflectionOpen(next);
+    if (next) {
+      if (playing) pause();
+      if (current) loadReflections(current.ayah_key);
+    }
+  }
+
+  async function saveReflection() {
+    if (!current) return;
+    const body = reflectionDraft.trim();
+    if (body.length < 6) {
+      setReflectionError("Reflection must be at least 6 characters.");
+      return;
+    }
+    setReflectionSaving(true);
+    setReflectionError(null);
+    try {
+      const r = await userClient.addReflection(current.ayah_key, body);
+      if (r === null) {
+        setReflectionGuest(true);
+        setReflectionError("Sign in to save reflections.");
+      } else {
+        setReflectionDraft("");
+        setReflectionsByAyah((prev) => ({
+          ...prev,
+          [current.ayah_key]: [r.note, ...(prev[current.ayah_key] ?? [])],
+        }));
+        void speak("Reflection saved.", { rate: 1.0 });
+      }
+    } catch (err) {
+      setReflectionError(err instanceof Error ? err.message : "Failed to save.");
+    } finally {
+      setReflectionSaving(false);
+    }
+  }
+
+  async function removeReflection(noteId: string) {
+    if (!current) return;
+    const r = await userClient.deleteReflection(noteId).catch(() => null);
+    if (r) {
+      setReflectionsByAyah((prev) => ({
+        ...prev,
+        [current.ayah_key]: (prev[current.ayah_key] ?? []).filter((n) => n.id !== noteId),
+      }));
+    }
   }
 
   // Identify which du'ā (if any) corresponds to the currently playing ayah.
@@ -356,6 +479,119 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
           )}
         </div>
 
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={toggleReflection}
+            aria-expanded={reflectionOpen}
+            aria-controls="reflection-panel"
+            className="text-sm text-emerald-300 hover:text-emerald-200 focus-visible:outline-amber-300 focus-visible:outline-offset-2 underline underline-offset-4"
+          >
+            {reflectionOpen ? "▾ Hide reflection" : "▸ Reflection / note"}
+          </button>
+          {reflectionOpen && (
+            <div
+              id="reflection-panel"
+              role="region"
+              aria-label="Reflection on this ayah"
+              className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5"
+            >
+              {reflectionGuest ? (
+                <p className="text-sm text-slate-300">
+                  <a
+                    href="/api/auth/login"
+                    className="text-emerald-300 underline underline-offset-4"
+                  >
+                    Sign in
+                  </a>{" "}
+                  to write and save a reflection on this ayah. Reflections are stored
+                  in your Qur&apos;ān Foundation profile and follow you across devices.
+                </p>
+              ) : (
+                <>
+                  <label
+                    htmlFor="reflection-textarea"
+                    className="block text-xs uppercase tracking-wider text-emerald-300/80 mb-2"
+                  >
+                    Your reflection on {current.ayah_key}
+                  </label>
+                  <textarea
+                    id="reflection-textarea"
+                    value={reflectionDraft}
+                    onChange={(e) => {
+                      setReflectionDraft(e.target.value);
+                      if (reflectionError) setReflectionError(null);
+                    }}
+                    placeholder="What does this ayah mean to you today?"
+                    rows={4}
+                    minLength={6}
+                    maxLength={10000}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 leading-relaxed focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 placeholder:text-slate-600"
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-slate-500">
+                      {reflectionDraft.length} / 10000
+                    </span>
+                    <button
+                      type="button"
+                      onClick={saveReflection}
+                      disabled={reflectionSaving || reflectionDraft.trim().length < 6}
+                      className="rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed border border-emerald-400/40 px-4 py-2 text-sm text-emerald-100 focus-visible:outline-amber-300"
+                    >
+                      {reflectionSaving ? "Saving…" : "Save reflection"}
+                    </button>
+                  </div>
+                  {reflectionError && (
+                    <p className="text-sm text-rose-300 mt-2" role="alert">
+                      ⚠ {reflectionError}
+                    </p>
+                  )}
+
+                  {reflectionsLoading && (
+                    <p className="text-xs text-slate-500 mt-4">Loading…</p>
+                  )}
+                  {(reflectionsByAyah[current.ayah_key] ?? []).length > 0 && (
+                    <ul className="mt-5 space-y-3 border-t border-emerald-500/10 pt-4">
+                      {(reflectionsByAyah[current.ayah_key] ?? []).map((n) => (
+                        <li
+                          key={n.id}
+                          className="rounded-xl bg-slate-950/60 border border-slate-800 p-3"
+                        >
+                          <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">
+                            {n.body}
+                          </p>
+                          <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
+                            <span>
+                              {n.createdAt
+                                ? new Date(n.createdAt).toLocaleString()
+                                : ""}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeReflection(n.id)}
+                              className="text-rose-400 hover:text-rose-300 underline underline-offset-2"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-4 text-xs text-slate-500 text-right">
+                    <a
+                      href="/library"
+                      className="text-amber-300/80 hover:text-amber-200 underline underline-offset-2"
+                    >
+                      📓 View all your reflections →
+                    </a>
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         <p
           aria-live="polite"
           className="mt-6 text-sm text-emerald-300"
@@ -405,7 +641,7 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
         </Button>
       </div>
 
-      <div className="flex justify-center">
+      <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-3">
         <label className="flex items-center gap-3 text-sm text-slate-400">
           Reciter:
           <select
@@ -420,6 +656,20 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
             ))}
           </select>
         </label>
+
+        <button
+          type="button"
+          onClick={toggleTts}
+          aria-pressed={ttsEnabled}
+          className={`text-sm rounded-lg border px-3 py-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 transition-colors ${
+            ttsEnabled
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/20"
+              : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+          }`}
+          title="Toggle English translation read aloud after each Arabic recitation"
+        >
+          {ttsEnabled ? "🔊 English: on" : "🕌 Arabic only"}
+        </button>
       </div>
 
       <details className="text-sm text-slate-400">
@@ -432,6 +682,8 @@ export default function AyahPlayer({ ayahs, mood, passages, duas, citations, onC
           <li>R — repeat current ayah</li>
           <li>B — bookmark / unbookmark</li>
           <li>T — show / hide tafsīr</li>
+          <li>N — write a reflection / note</li>
+          <li>E — toggle English read-aloud</li>
           <li>Esc — close player</li>
         </ul>
       </details>

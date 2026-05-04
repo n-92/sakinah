@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { storage, type Bookmark, type MoodCollection, type StreakState } from "@/lib/storage";
 
 export default function UserPanel({
@@ -13,6 +14,7 @@ export default function UserPanel({
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [collections, setCollections] = useState<MoodCollection[]>([]);
   const [streak, setStreak] = useState<StreakState | null>(null);
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [synced, setSynced] = useState(false);
 
   useEffect(() => {
@@ -20,31 +22,100 @@ export default function UserPanel({
     setCollections(storage.listCollections());
     setStreak(storage.getStreak()); // optimistic local read
 
-    // Try the remote QF User API; if signed in, override.
     let cancelled = false;
     (async () => {
+      // 1) Source of truth for sign-in state: the auth cookie.
+      try {
+        const meR = await fetch("/api/auth/me", { cache: "no-store" });
+        if (meR.ok) {
+          const me = (await meR.json()) as { signedIn?: boolean };
+          if (!cancelled) setSignedIn(Boolean(me.signedIn));
+        } else if (!cancelled) {
+          setSignedIn(false);
+        }
+      } catch {
+        if (!cancelled) setSignedIn(false);
+      }
+
+      // 2) Independently try to pull the live streak from QF.
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const r = await fetch(
           "/api/user/streak" + (tz ? `?tz=${encodeURIComponent(tz)}` : ""),
           { cache: "no-store" },
         );
-        if (!r.ok) return;
-        const data = (await r.json()) as {
-          ok: boolean;
-          current_streak: number;
-          total_sessions: number;
-        };
-        if (cancelled || !data.ok) return;
-        setStreak({
-          current_streak: data.current_streak,
-          longest_streak: data.current_streak,
-          last_active_day: null,
-          total_sessions: data.total_sessions,
-        });
-        setSynced(true);
+        if (r.ok) {
+          const data = (await r.json()) as {
+            ok: boolean;
+            current_streak: number;
+            total_sessions: number;
+          };
+          if (!cancelled && data.ok) {
+            setStreak({
+              current_streak: data.current_streak,
+              longest_streak: data.current_streak,
+              last_active_day: null,
+              total_sessions: data.total_sessions,
+            });
+            setSynced(true);
+          }
+        }
       } catch {
         /* offline / not signed in — keep local */
+      }
+      if (cancelled) return;
+
+      // 3) Hydrate bookmarks from Quran.Foundation so they survive
+      //    cookie/localStorage clears across devices.
+      try {
+        const r = await fetch("/api/user/bookmarks", { cache: "no-store" });
+        if (r.ok) {
+          const data = (await r.json()) as {
+            ok: boolean;
+            bookmarks?: Array<{ key: number; verseNumber?: number }>;
+          };
+          if (!cancelled && data.ok && data.bookmarks) {
+            const remote = data.bookmarks
+              .filter((b) => typeof b.verseNumber === "number")
+              .map((b) => ({ surah: b.key, ayah: b.verseNumber as number }));
+            storage.mergeRemoteBookmarks(remote);
+            const merged = storage.listBookmarks();
+            setBookmarks(merged);
+
+            // Fetch arabic + translation for entries we know nothing about yet.
+            const missing = merged
+              .filter((b) => !b.arabic || !b.translation)
+              .map((b) => b.ayah_key);
+            if (missing.length > 0) {
+              const vR = await fetch(
+                "/api/verses?keys=" + encodeURIComponent(missing.slice(0, 50).join(",")),
+                { cache: "force-cache" },
+              );
+              if (vR.ok) {
+                const vData = (await vR.json()) as {
+                  ok: boolean;
+                  ayahs?: Array<{
+                    ayah_key: string;
+                    arabic: string;
+                    translations: Array<{ text: string }>;
+                  }>;
+                };
+                if (!cancelled && vData.ok && vData.ayahs) {
+                  for (const a of vData.ayahs) {
+                    storage.updateBookmarkText(
+                      a.ayah_key,
+                      a.arabic,
+                      a.translations[0]?.text ?? "",
+                    );
+                  }
+                  setBookmarks(storage.listBookmarks());
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        /* silent */
       }
     })();
     return () => {
@@ -70,9 +141,32 @@ export default function UserPanel({
             <span className="text-emerald-400" title="Streak from Quran Foundation">
               ✓ synced with Quran.Foundation
             </span>
-          ) : (
+          ) : signedIn ? (
+            <span className="text-amber-400/80" title="Signed in — streak will sync shortly">
+              ✓ signed in · syncing…
+            </span>
+          ) : signedIn === false ? (
             <span className="text-slate-600">local only · sign in to sync</span>
+          ) : (
+            <span className="text-slate-600">…</span>
           )}
+        </div>
+        <div className="text-center mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
+          <Link
+            href="/library"
+            className="inline-block text-xs text-amber-300 hover:text-amber-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 rounded px-2 py-1"
+          >
+            📓 View all reflections
+          </Link>
+          <Link
+            href="/bookmarks"
+            className="inline-block text-xs text-amber-300 hover:text-amber-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 rounded px-2 py-1"
+          >
+            🔖 View all bookmarks
+            {bookmarks.length > 0 && (
+              <span className="ml-1 text-slate-500">({bookmarks.length})</span>
+            )}
+          </Link>
         </div>
       </section>
 
@@ -92,28 +186,6 @@ export default function UserPanel({
                 >
                   {c.name} · {c.ayah_keys.length}
                 </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {bookmarks.length > 0 && (
-        <section aria-label="Bookmarks" className="flex flex-col gap-2">
-          <h3 className="text-sm uppercase tracking-wider text-slate-400">
-            Bookmarks
-          </h3>
-          <ul className="flex flex-col gap-2">
-            {bookmarks.slice(0, 5).map((b) => (
-              <li
-                key={b.ayah_key}
-                className="rounded-xl bg-slate-900/50 border border-slate-800 p-3"
-              >
-                <div className="text-amber-300 text-xs">{b.ayah_key}</div>
-                <div className="text-slate-200 text-sm line-clamp-2">{b.translation}</div>
-                {b.mood && (
-                  <div className="text-slate-500 text-xs mt-1">saved for: {b.mood}</div>
-                )}
               </li>
             ))}
           </ul>

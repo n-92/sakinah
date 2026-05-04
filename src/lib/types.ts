@@ -41,7 +41,9 @@ export type SearchResponse = {
   total: number;
   warnings?: string[];
   duas?: DuaMeta[];
-  source?: "semantic" | "dua" | "random";
+  source?: "semantic" | "dua" | "random" | "ayah_of_the_day" | "surah" | "plan";
+  /** Optional one-line notice surfaced to the user (e.g. capped surah). */
+  notice?: string;
   /** Human-readable record of MCP tool calls used to ground this response. */
   citations?: string[];
 };

@@ -32,6 +32,16 @@ export type StreakState = {
   total_sessions: number;
 };
 
+export type ReadingPlanType = "khatm-30"; // 1 juz' / day, 30-day khatm
+
+export type ReadingPlan = {
+  type: ReadingPlanType;
+  started_at: string; // YYYY-MM-DD (UTC)
+  // Days the user has marked complete, as YYYY-MM-DD strings.
+  // The plan is sequential: completedDays.length === current juz' index - 1.
+  completed_days: string[];
+};
+
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -76,6 +86,48 @@ export const storage = {
   },
   isBookmarked(ayah_key: string): boolean {
     return storage.listBookmarks().some((b) => b.ayah_key === ayah_key);
+  },
+  removeBookmark(ayah_key: string): void {
+    const list = storage.listBookmarks().filter((b) => b.ayah_key !== ayah_key);
+    write("bookmarks", list);
+  },
+  /**
+   * Update the arabic / translation text for an existing bookmark
+   * (e.g. after we've fetched the verse content for a remote-only entry).
+   */
+  updateBookmarkText(ayah_key: string, arabic: string, translation: string): void {
+    const list = storage.listBookmarks();
+    const idx = list.findIndex((b) => b.ayah_key === ayah_key);
+    if (idx < 0) return;
+    list[idx] = { ...list[idx], arabic, translation };
+    write("bookmarks", list);
+  },
+  /**
+   * Merge bookmarks fetched from Quran.Foundation into localStorage.
+   * Existing local entries (with their arabic/translation/mood) win;
+   * remote-only entries are added with empty arabic/translation
+   * (UI degrades gracefully — only the ayah_key is shown until the
+   * user opens the player for that ayah).
+   */
+  mergeRemoteBookmarks(remote: Array<{ surah: number; ayah: number }>): number {
+    const local = storage.listBookmarks();
+    const have = new Set(local.map((b) => b.ayah_key));
+    let added = 0;
+    for (const r of remote) {
+      const key = `${r.surah}:${r.ayah}`;
+      if (!have.has(key)) {
+        local.push({
+          ayah_key: key,
+          arabic: "",
+          translation: "",
+          saved_at: Date.now(),
+        });
+        have.add(key);
+        added += 1;
+      }
+    }
+    if (added > 0) write("bookmarks", local);
+    return added;
   },
 
   // Mood collections
@@ -124,5 +176,44 @@ export const storage = {
     }
     write("streak", s);
     return s;
+  },
+
+  // Playback preferences
+  getTtsEnabled(): boolean {
+    return read<boolean>("tts_enabled", true);
+  },
+  setTtsEnabled(v: boolean): void {
+    write("tts_enabled", v);
+  },
+
+  // Reading plan
+  getPlan(): ReadingPlan | null {
+    return read<ReadingPlan | null>("reading_plan", null);
+  },
+  startPlan(type: ReadingPlanType = "khatm-30"): ReadingPlan {
+    const today = new Date().toISOString().slice(0, 10);
+    const plan: ReadingPlan = {
+      type,
+      started_at: today,
+      completed_days: [],
+    };
+    write("reading_plan", plan);
+    return plan;
+  },
+  cancelPlan(): void {
+    write<ReadingPlan | null>("reading_plan", null);
+  },
+  /**
+   * Mark today's reading complete. Idempotent — calling twice on the same
+   * day is a no-op. Returns the updated plan.
+   */
+  markPlanDayComplete(): ReadingPlan | null {
+    const plan = storage.getPlan();
+    if (!plan) return null;
+    const today = new Date().toISOString().slice(0, 10);
+    if (plan.completed_days.includes(today)) return plan;
+    plan.completed_days = [...plan.completed_days, today];
+    write("reading_plan", plan);
+    return plan;
   },
 };

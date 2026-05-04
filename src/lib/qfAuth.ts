@@ -18,7 +18,7 @@ export const QF_REDIRECT_URI =
   process.env.QF_REDIRECT_URI ?? "http://localhost:3000/api/auth/callback";
 
 export const QF_SCOPES =
-  "openid offline_access collection bookmark reading_session preference user";
+  "openid offline_access user collection bookmark reading_session preference streak activity_day note";
 
 export type TokenSet = {
   access_token: string;

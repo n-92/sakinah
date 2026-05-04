@@ -32,8 +32,13 @@ export async function GET(req: Request) {
     if (err instanceof QfApiError && err.status === 401) {
       return NextResponse.json({ ok: false, error: "unauthenticated" }, { status: 401 });
     }
+    const debug =
+      err instanceof QfApiError
+        ? { status: err.status, body: err.body, message: err.message }
+        : { message: err instanceof Error ? err.message : String(err) };
+    console.error("[/api/user/streak] upstream error", debug);
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : "unknown" },
+      { ok: false, error: err instanceof Error ? err.message : "unknown", debug },
       { status: 502 },
     );
   }

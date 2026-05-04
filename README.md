@@ -44,13 +44,29 @@ eyes closed and a single key.
 ## Running locally
 
 ```sh
+git clone https://github.com/n-92/sakinah.git
+cd sakinah
 npm install
-npm run dev   # http://localhost:3000
+cp .env.example .env.local   # then fill in the values (see below)
+npm run dev                  # http://localhost:3000
 ```
+
+### Environment variables
+
+Copy `.env.example` to `.env.local` and fill in:
+
+| Variable | Where to get it |
+| --- | --- |
+| `QF_CLIENT_ID`, `QF_CLIENT_SECRET` | Register an OAuth2 app at <https://api-docs.quran.foundation>. |
+| `QF_ENV`, `QF_AUTH_BASE`, `QF_API_BASE` | Use the `prelive` values from `.env.example` while developing. |
+| `QF_REDIRECT_URI` | `http://localhost:3000/api/auth/callback` for local dev. |
+| `SESSION_SECRET` | Generate one: `openssl rand -hex 32`. |
+| `QURAN_MCP_URL` | Defaults to `https://mcp.quran.ai/` (no auth required). |
 
 The dev server makes outbound calls to:
 - `https://mcp.quran.ai` (semantic ayah search, no auth required)
 - `https://everyayah.com/data/...` (Arabic MP3s)
+- `https://prelive-oauth2.quran.foundation` and `https://apis-prelive.quran.foundation` (QF OAuth + User APIs)
 
 ## Project layout
 

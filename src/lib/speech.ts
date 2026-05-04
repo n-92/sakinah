@@ -34,10 +34,19 @@ const PREFERRED_VOICE_ORDER = [
 ];
 
 const MALE_NAME_RX =
-  /\b(male|guy|davis|andrew|tony|brandon|christopher|eric|roger|ryan|thomas|daniel|alex|fred|brian|adam|connor|liam|michael|noah|jacob|aaron|david|mark|james|paul|peter|john)\b/i;
+  /\b(male|guy|davis|andrew|tony|brandon|christopher|eric|roger|ryan|thomas|daniel|alex|fred|brian|adam|connor|liam|michael|noah|jacob|aaron|david|mark|james|paul|peter|john|arthur|george|harry|oliver|charlie|jack|leo|max|finn|oscar|henry|theo|sam|ben|tom)\b/i;
 
 const FEMALE_NAME_RX =
-  /\b(female|aria|jenny|sonia|samantha|ava|allison|susan|karen|moira|tessa|veena|fiona|emma|amy|libby|sara|zira|hazel|catherine)\b/i;
+  /\b(female|aria|jenny|sonia|samantha|ava|allison|susan|karen|moira|tessa|veena|fiona|emma|amy|libby|sara|zira|hazel|catherine|olivia|sophia|isabella|mia|ella|grace|chloe|lily|ruby|rose|elsie|maya|nora|tara|eva|nia)\b/i;
+
+// Android / Chromium speech-engine voiceURI gender hints. Google's TTS
+// voice IDs encode the speaker via the trigraph after `-x-`. These three-letter
+// codes correspond to specific voice talents — we list the known male ones here
+// so we can prefer them on Android (where voice.name is just "English (United States)").
+const MALE_VOICE_URI_RX =
+  /\b(en-(us|gb|au|in|ca)-x-(iom|sfg|tpc|tpd|sfb|rjs|cxx|iog|cmg|gba|gbb|gbe))\b/i;
+const FEMALE_VOICE_URI_RX =
+  /\b(en-(us|gb|au|in|ca)-x-(tpf|sfg|sfb|gbf|gbg|gbd|cxx|tpa|gbc|iol|gbd))\b/i;
 
 let cachedVoices: SpeechSynthesisVoice[] | null = null;
 
@@ -72,22 +81,38 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
 export async function pickVoice(): Promise<SpeechSynthesisVoice | null> {
   const voices = cachedVoices ?? (await loadVoices());
   if (!voices.length) return null;
+  // Exact-name match against our curated preferred list (highest quality).
   for (const name of PREFERRED_VOICE_ORDER) {
     const v = voices.find((x) => x.name === name);
     if (v) return v;
   }
   const en = voices.filter((v) => v.lang?.startsWith("en"));
-  // Prefer male-named English voices; explicitly skip obviously-female ones.
-  const male = en.find(
+
+  // Pass 1 — match by voiceURI gender hint (Android / Chrome OS).
+  // Skip anything tagged female via either signal.
+  const maleUri = en.find(
+    (v) =>
+      MALE_VOICE_URI_RX.test(v.voiceURI ?? "") &&
+      !FEMALE_VOICE_URI_RX.test(v.voiceURI ?? "") &&
+      !FEMALE_NAME_RX.test(v.name),
+  );
+  if (maleUri) return maleUri;
+
+  // Pass 2 — match by male name in voice.name (desktop OSes).
+  const maleName = en.find(
     (v) => MALE_NAME_RX.test(v.name) && !FEMALE_NAME_RX.test(v.name),
   );
-  if (male) return male;
-  return (
-    en.find((v) => !FEMALE_NAME_RX.test(v.name)) ??
-    en[0] ??
-    voices[0] ??
-    null
+  if (maleName) return maleName;
+
+  // Pass 3 — anything not obviously female.
+  const notFemale = en.find(
+    (v) =>
+      !FEMALE_NAME_RX.test(v.name) &&
+      !FEMALE_VOICE_URI_RX.test(v.voiceURI ?? ""),
   );
+  if (notFemale) return notFemale;
+
+  return en[0] ?? voices[0] ?? null;
 }
 
 export async function speak(

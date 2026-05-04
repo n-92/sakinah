@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { searchQuran, fetchQuran, fetchTranslation } from "@/lib/mcp";
-import { surahLength } from "@/lib/quranMeta";
+import { surahLength, surahName } from "@/lib/quranMeta";
+import { resolveSurahQuery, surahPlayWindow, SURAH_PLAY_CAP } from "@/lib/surahQuery";
+import { fetchPassageAyahs } from "@/lib/fetchAyahs";
 import type { Ayah, Passage, SearchResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -174,6 +176,44 @@ export async function POST(req: Request) {
   }
 
   try {
+    // 0. Direct surah-by-number / surah-by-name shortcut.
+    //    e.g. "36", "Surah 36", "Yasin", "Al-Ikhlās", "the cave"
+    const directSurah = resolveSurahQuery(mood);
+    if (directSurah) {
+      const { start, end } = surahPlayWindow(directSurah);
+      const passages: Passage[] = [
+        {
+          surah: directSurah,
+          start,
+          end,
+          reason: `Sūrah ${directSurah} · ${surahName(directSurah)}`,
+        },
+      ];
+      const ranges = passagesToRangeString(passages);
+      const ayahs = await fetchPassageAyahs(passages);
+      const fullLength = surahLength(directSurah);
+      const truncated = end < fullLength;
+
+      return NextResponse.json(
+        {
+          query: mood,
+          ayahs,
+          passages,
+          total: ayahs.length,
+          source: "surah",
+          notice: truncated
+            ? `Playing ayahs ${start}–${end} of ${fullLength} (capped at ${SURAH_PLAY_CAP} for this view).`
+            : undefined,
+          citations: [
+            `surah_lookup(${JSON.stringify(mood)}) → ${directSurah}`,
+            `fetch_quran(${ranges}, ${ARABIC_EDITION})`,
+            `fetch_translation(${ranges}, ${ENGLISH_EDITION})`,
+          ],
+        } satisfies SearchResponse,
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
     // 1. Semantic search → scattered hits across the Qur'an.
     const raw = (await searchQuran({
       query: mood,

@@ -46,10 +46,11 @@ export default function DocsPage() {
             </li>
             <li>
               <strong className="text-slate-100">Sakīnah listens.</strong>{" "}
-              It first
-              checks a curated catalogue of authentic du&apos;ās from the Qur&apos;ān; if
-              nothing fits, it does a semantic search across the Qur&apos;ān via the
-              Qur&apos;ān Foundation MCP server.
+              If you typed a number or a surah name (e.g.{" "}
+              <em>36</em>, <em>Yasin</em>, <em>Al-Ikhlās</em>) it loads that
+              whole surah. Otherwise it checks a curated catalogue of authentic
+              du&apos;ās from the Qur&apos;ān; if nothing fits, it does a semantic
+              search across the Qur&apos;ān via the Qur&apos;ān Foundation MCP server.
             </li>
             <li>
               <strong className="text-slate-100">It plays the passage.</strong>{" "}
@@ -72,7 +73,9 @@ export default function DocsPage() {
                 <KbdRow keys="← / →" desc="Previous / next ayah" />
                 <KbdRow keys="R" desc="Repeat current ayah" />
                 <KbdRow keys="B" desc="Bookmark / unbookmark" />
+                <KbdRow keys="N" desc="Write / edit reflection for this ayah" />
                 <KbdRow keys="T" desc="Show / hide tafsīr" />
+                <KbdRow keys="E" desc="Toggle English narration (TTS) on / off" />
                 <KbdRow keys="Esc" desc="Close player" />
               </tbody>
             </table>
@@ -93,8 +96,11 @@ export default function DocsPage() {
             </li>
             <li>Voice input (Web Speech API) for users who can&apos;t type</li>
             <li>
-              Text-to-speech narration with a <em>male reciter</em> by default; falls
-              back gracefully when the browser can&apos;t reach Google&apos;s speech servers
+              Arabic recitation by Mishary Alafasy (Quran.com CDN); English
+              translation narrated by the browser&apos;s Web Speech API with a male
+              voice forced on every platform. Press{" "}
+              <kbd className="kbd">E</kbd> to mute the English narration when you only
+              want the recitation.
             </li>
             <li>High-contrast palette (slate + amber), minimum 16 px body text</li>
             <li>
@@ -145,6 +151,21 @@ export default function DocsPage() {
               tools="GET /auth/v1/streaks/current-streak-days"
               what="Reads the user's current streak from the source of truth"
             />
+            <ApiRow
+              name="Bookmarks API (default collection)"
+              tools="GET / POST / DELETE /auth/v1/collections/__default__/bookmarks"
+              what="Saved ayahs are written to the user's Quran.com-style Favorites collection — they persist across devices and survive cookie clears"
+            />
+            <ApiRow
+              name="Notes API"
+              tools="GET / POST / DELETE /auth/v1/notes"
+              what="Reflections are stored as notes against verse ranges; the /library page lists every reflection alongside its verse"
+            />
+            <ApiRow
+              name="Verse content (Sahih International + Arabic)"
+              tools="MCP fetch_quran + fetch_translation"
+              what="Re-fetches the Arabic and English text for any bookmark or reflection so it always renders even after a sign-out → sign-in round-trip"
+            />
           </ul>
         </Section>
 
@@ -152,15 +173,14 @@ export default function DocsPage() {
           <ul className="list-disc pl-5 space-y-3 leading-relaxed">
             <li>
               <strong className="text-slate-100">Guests:</strong>{" "}
-              bookmarks and saved
-              moods stay in your browser&apos;s <code className="kbd">localStorage</code>.
-              Nothing leaves your device.
+              bookmarks and reflections stay in your browser&apos;s{" "}
+              <code className="kbd">localStorage</code>. Nothing leaves your device.
             </li>
             <li>
               <strong className="text-slate-100">Signed-in users:</strong>{" "}
-              reading
-              sessions are POSTed to the Qur&apos;ān Foundation Activity Days API so streaks
-              follow you anywhere. Your search queries are never stored.
+              reading sessions, bookmarks, and reflections sync to your Qur&apos;ān
+              Foundation account so they follow you across devices and survive cookie
+              clears. Your search queries are never stored.
             </li>
             <li>
               <strong className="text-slate-100">No third-party analytics.</strong>{" "}
@@ -227,6 +247,14 @@ function Section({
 function FeatureGrid() {
   const features: { title: string; body: string }[] = [
     {
+      title: "30-day reading plan",
+      body: "Start a khatm: one juzʾ per day, in mushaf order. The card on the home screen shows today's juzʾ, ayah range, and progress; finishing it credits your Qurʾān Foundation streak.",
+    },
+    {
+      title: "Play any surah by number or name",
+      body: "Type \"36\", \"Surah 36\", \"Yasin\", \"Al-Ikhlās\", or even \"the cave\" — and Sakīnah skips the semantic step and plays the whole surah from ayah 1.",
+    },
+    {
       title: "Mood-first search",
       body: "Describe how you feel or what you're thinking — no need to know surah numbers or Arabic.",
     },
@@ -247,6 +275,10 @@ function FeatureGrid() {
       body: "Speak your mood; control playback with the keyboard alone.",
     },
     {
+      title: "Ayah of the day",
+      body: "A verse picked deterministically each day appears on the home screen — same ayah for everyone, refreshed at midnight UTC.",
+    },
+    {
       title: "Surprise me",
       body: "Random shuffle: a complete short surah, picked for you.",
     },
@@ -255,8 +287,12 @@ function FeatureGrid() {
       body: "Sign in to record reading sessions to the Qur'ān Foundation Activity Days API — your streak is yours, not ours.",
     },
     {
-      title: "Bookmarks & saved moods",
-      body: "Save passages you want to come back to. Saved moods replay the same query later.",
+      title: "Bookmarks (synced)",
+      body: "Tap B on any ayah to save it. The /bookmarks page shows every saved verse with full Arabic + English text and a Delete button. Bookmarks survive sign-out, cookie-clears, and device switches — they're stored in your Quran.Foundation Favorites collection.",
+    },
+    {
+      title: "Reflections",
+      body: "Press N on any ayah to write a private reflection. They sync to your Quran.Foundation account and the /library page lists every reflection alongside the verse it belongs to.",
     },
   ];
   return (
