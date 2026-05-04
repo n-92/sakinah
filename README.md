@@ -14,6 +14,8 @@ eyes closed and a single key.
 - 🌐 **Live app:** <https://quran-hackathon-phi.vercel.app/>
 - 🎥 **Demo video:** <https://youtu.be/fkjw906k2_Y>
 
+![Sakīnah home screen — a centred microphone button on a calm dark background, with the prompt "What are you thinking?" and a text input reading "e.g. I keep worrying about the future · or 'Yasin', 'Surah 36'"](docs/screenshots/home.png)
+
 ## What's special
 
 - **Voice in, voice out.** Web Speech API for input, EveryAyah CDN for
