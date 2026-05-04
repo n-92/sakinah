@@ -14,8 +14,8 @@ eyes closed and a single key.
 ## What's special
 
 - **Voice in, voice out.** Web Speech API for input, EveryAyah CDN for
-  Arabic recitation, browser-native neural voices (Aria / Jenny / Sonia) for
-  English translation. No paid TTS dependencies — runs at $0/request.
+  Arabic recitation, browser-native neural voices for English translation.
+  No paid TTS dependencies — runs at $0/request.
 - **Real semantic search** through the official
   [Quran MCP](https://mcp.quran.ai) — `search_quran` runs vector search +
   reranking on every ayah, in any language. Your mood phrase *is* the query.
@@ -99,20 +99,6 @@ src/
 | R | Replay current |
 | B | Bookmark current |
 | Esc | Back to home |
-
-## Judging-criteria mapping
-
-- **Impact (30)** — Voice-first design opens the Qur'an to blind / low-vision
-  users and to anyone who can't read Arabic. Emotional matching meets people
-  where they are.
-- **UX (20)** — Single-key, screen-reader-first; AAA contrast; reduced-motion
-  honoured; large focus rings; audio confirmations of every state change.
-- **Tech (20)** — Real Streamable-HTTP MCP client with grounding-nonce
-  caching; SpeechSynthesis voice ranking; deterministic audio queue.
-- **Innovation (15)** — MCP-grounded mood-to-ayah is novel; treats the user's
-  free-form feeling as a vector query against canonical scripture.
-- **API depth (15)** — Content (MCP) + Audio (Quran.com CDN) + User
-  resources (Bookmarks, Collections, Streaks).
 
 ## License
 
