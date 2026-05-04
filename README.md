@@ -11,6 +11,9 @@ soothing Arabic recitation followed by a natural English voice.
 The whole flow is designed so a blind or low-vision user can use it with their
 eyes closed and a single key.
 
+- 🌐 **Live app:** <https://quran-hackathon-phi.vercel.app/>
+- 🎥 **Demo video:** <https://youtu.be/fkjw906k2_Y>
+
 ## What's special
 
 - **Voice in, voice out.** Web Speech API for input, EveryAyah CDN for
